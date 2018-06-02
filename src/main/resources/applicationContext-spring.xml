@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>      
+<beans xmlns="http://www.springframework.org/schema/beans"      
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"     
+    xmlns:p="http://www.springframework.org/schema/p"    
+    xmlns:aop="http://www.springframework.org/schema/aop"     
+    xmlns:context="http://www.springframework.org/schema/context"    
+    xmlns:jee="http://www.springframework.org/schema/jee"    
+    xmlns:tx="http://www.springframework.org/schema/tx"    
+    xsi:schemaLocation="      
+        http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-4.0.xsd    
+        http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.0.xsd    
+        http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.0.xsd    
+        http://www.springframework.org/schema/jee http://www.springframework.org/schema/jee/spring-jee-4.0.xsd    
+        http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-4.0.xsd">
+      
+      <!-- 开启spring的注解功能 -->
+      <context:component-scan base-package="com.zx.*" />
+      
+      <!-- 配置数据连接池 -->
+      <!-- 加载jdbc配置文件 -->
+      <!--  <context:property-placeholder location="classpath:jdbc.properties"/> -->
+      <!-- 加载多个配置文件时  redis jdbc -->
+      <context:property-placeholder location="classpath*:*.properties"/>
+      
+      <!-- 数据连接池配置：阿里 德鲁伊数据连接池 -->
+      <bean id="dataSource" class="com.alibaba.druid.pool.DruidDataSource" destroy-method="close">
+	      	<property name="url" value="${jdbc.jdbcUrl}"/>  
+	        <property name="username" value="${jdbc.username}"/>  
+	        <property name="password" value="${jdbc.password}"/>  
+	        <property name="driverClassName" value="${jdbc.driverClass}"/>  
+	        <property name="maxActive" value="${maxActive}"/>  
+	        <property name="minIdle" value="${minIdle}"/>  
+      </bean>
+      
+      
+      <!-- 配置mybatis的 sqlSessionFactory -->
+      <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+      		<property name="dataSource" ref="dataSource"></property>
+      		<!-- 自动扫描mapper.xml 文件 -->
+      		<property name="mapperLocations" value="classpath:com/zx/mappers/*.xml"></property>
+      		<!-- mybatis配置文件 -->  
+      		<property name="configLocation" value="classpath:mybatis-config.xml"></property>
+      </bean>
+      
+      <!-- 启用MapperScanner DAO接口所在包名，Spring会自动查找其下的类 -->
+	  <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+		<property name="basePackage" value="com.zx.*" />
+		<property name="sqlSessionFactoryBeanName" value="sqlSessionFactory" />
+	  </bean>
+      
+
+       <!-- 配置事务管理器 -->	
+       <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+       		<property name="dataSource" ref="dataSource"></property>
+       </bean>
+       
+       <!-- 配置事务通知属性 -->
+       <tx:advice id="txAdvice" transaction-manager="transactionManager">
+       		<!-- 定义事务传播属性 --> 
+       		<tx:attributes>
+       			<tx:method name="save*" propagation="REQUIRED"/>
+       		</tx:attributes>
+       </tx:advice>
+       
+       <!-- 配置事务切面 -->
+       <aop:config>
+       		<!-- 切点 -->
+        	<aop:pointcut id="serviceOperation" expression="execution(* com.zx.service.*.*(..))" />    
+        	<!-- 织入 -->
+        	<aop:advisor advice-ref="txAdvice" pointcut-ref="serviceOperation" />    
+       </aop:config>
+       
+        
+       <!-- redis 配置 -->
+       
+       <!-- 读取redis配置文件 -->
+      <!--  <context:property-placeholder location="classpath:redis.properties" ignore-unresolvable="true" />  -->
+       
+       <!-- redis连接池 -->
+       <bean id="jedisConfig" class="redis.clients.jedis.JedisPoolConfig">
+	        <property name="maxTotal" value="${redis_max_active}"></property>  
+	        <property name="maxIdle" value="${redis_max_idle}"></property>  
+	        <property name="maxWaitMillis" value="${redis_max_wait}"></property>  
+	        <property name="testOnBorrow" value="${redis_test_on_borrow}"></property> 
+       </bean>
+       
+       <!-- redis连接工厂 -->
+        <bean id="connectionFactory" class="org.springframework.data.redis.connection.jedis.JedisConnectionFactory">  
+	        <property name="hostName" value="${redis_addr}"></property>  
+	        <property name="port" value="${redis_port}"></property>  
+	        <!-- <property name="password" value="${redis_auth}"></property>  --> 
+	        <property name="poolConfig" ref="jedisConfig"></property>  
+    	</bean>  
+       
+       <!-- redis操作模板，这里采用尽量面向对象的模板 -->  
+	    <bean id="redisTemplate" class="org.springframework.data.redis.core.StringRedisTemplate">  
+	        <property name="connectionFactory" ref="connectionFactory" />  
+	    	<!--     如果不配置Serializer，那么存储的时候只能使用String，如果用对象类型存储，那么会提示错误 can't cast to String！！！-->  
+	        <property name="keySerializer">  
+	            <bean class="org.springframework.data.redis.serializer.StringRedisSerializer" />  
+	        </property>
+	         <property name="hashKeySerializer">  
+	            <bean class="org.springframework.data.redis.serializer.StringRedisSerializer" />  
+	        </property>
+	        <property name="valueSerializer">  
+	            <bean class="org.springframework.data.redis.serializer.JdkSerializationRedisSerializer" />  
+	        </property> 
+	        <property name="hashValueSerializer">  
+	            <bean class="org.springframework.data.redis.serializer.JdkSerializationRedisSerializer" />  
+	        </property> 
+	        
+	       <!--  <property name="valueSerializer">  
+	            <bean class="org.springframework.data.redis.serializer.JdkSerializationRedisSerializer" />  
+	        </property> 
+	        <property name="hashValueSerializer">  
+	            <bean class="org.springframework.data.redis.serializer.JdkSerializationRedisSerializer" />  
+	        </property>   -->
+	    </bean>     
+      
+		
+       
+       <!-- shiro 权限框架配置文件 -->
+       <import resource="classpath:spring-shiro.xml"/>
+       
+       
+</beans>   
